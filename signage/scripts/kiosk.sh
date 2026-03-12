@@ -1,21 +1,32 @@
 #!/bin/bash
 
-# this sleep is needed because if wayland is not ready, chromium will fail to launch and crash loop
+# Wait for X11 desktop to load
 sleep 5
 
-# source the config file to get the ENDPOINT variable
-source /home/$(whoami)/signage/config.env
+# Source your config
+source /home/$(whoami)/signage/config/config.env
 
-# crash loop prevention: set exited_cleanly to true and exit_type to Normal in the Chromium preferences file
+# Disable screen blanking & power saving
+xset s off
+xset -dpms
+xset s noblank
+
+# Fix Chromium crash recovery
 sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
 sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' ~/.config/chromium/Default/Preferences 2>/dev/null || true
 
-# Launch Chromium
+unclutter -idle 0 &
+
+# Launch Chromium in kiosk
 while true; do
   chromium \
     --kiosk \
-    --ozone-platform=wayland \
     --start-maximized \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-accelerated-video-decode \
+    --disable-accelerated-2d-canvas \
+    --use-gl=swiftshader \
     --noerrdialogs \
     --disable-infobars \
     --autoplay-policy=no-user-gesture-required \
@@ -27,6 +38,4 @@ while true; do
 
   sleep 2
 done
-# The loop will restart Chromium if it crashes, with a 2-second delay to prevent rapid crash loops.
-
 

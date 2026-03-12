@@ -1,151 +1,161 @@
-# Raspberry Pi Signage Player  
-## Testing Summary (Wayland + systemd)
+# Development Notes – Raspberry Pi Signage Player
+
+This document records the major configuration changes, challenges encountered during development, and the solutions implemented while setting up the Raspberry Pi digital signage player.
 
 ---
 
-## Environment
+# 1. Wayland to X11 Migration
 
-- OS: Raspberry Pi OS (Full)
-- Session: LXDE-pi-wayfire (Wayland)
-- User: `vers`
-- Display: 1024x768 @ 60Hz
-- Browser: Chromium
-- Test Endpoint: `http://localhost:3000`
+## Issue
 
----
+The initial setup attempted to use **Wayland-based compositors** such as:
 
-## systemd Test Server
+- Wayfire
+- Labwc
+- seatd
 
-Service file:
+However, multiple problems were encountered:
 
-`/etc/systemd/system/signages-server.service`
+- Chromium kiosk mode failed to consistently load the webpage.
+- Media playback sometimes failed.
+- Audio routing behaved inconsistently.
+- Debugging the Wayland compositor environment was difficult.
 
-```ini
-[Unit]
-Description=Signage Test Server
-After=network.target
+Additionally, kiosk scripts designed for X11 did not behave reliably under Wayland.
 
-[Service]
-WorkingDirectory=/home/vers/signage/server
-ExecStart=/usr/bin/node server.js
-Restart=always
-RestartSec=5
-User=vers
-Environment=NODE_ENV=production
+## Solution
 
-[Install]
-WantedBy=multi-user.target
-```
+The system was migrated back to **X11**, which is currently more stable for kiosk-based signage setups.
 
-### Result
+Actions taken:
 
-- Server starts on boot  
-- Auto-restarts on crash  
-- Runs under correct user  
+- Removed Wayland-related packages
+- Removed `seatd`
+- Removed `labwc`
+- Disabled Wayland compositor services
+- Reconfigured the system to start **X11 using `startx`**
+
+After the migration:
+
+- Chromium kiosk mode worked reliably.
+- Video playback worked correctly.
+- HDMI audio functioned properly.
 
 ---
 
-## Wayfire Configuration
+# 2. Chromium Autoplay Restrictions
 
-`~/.config/wayfire.ini`
+## Issue
 
-```ini
-[autostart]
-kiosk = /home/vers/signage/scripts/kiosk.sh
+Chromium blocks media playback without user interaction by default.  
+This prevented videos from playing automatically when the kiosk page loaded.
 
-[idle]
-dpms_timeout = -1
+The browser displayed the error:
+NotAllowedError: play() failed because the user didn't interact with the document first
+### Solution
 
-[output]
-scale = 1
+Chromium was launched with the following flag:
 
-[core]
-plugins = autostart hide-cursor
-```
+### Solution
 
-### Key Points
+Chromium was launched with the following flag:
+--autoplay-policy=no-user-gesture-required
 
-- `dpms_timeout = -1` prevents screen sleep  
-- `scale = 1` fixes rendering/scaling issue  
-- Removing other plugins disables:
-  - Alt+Tab
-  - Ctrl+Alt+T
-  - Window switching  
 
-Result: Fully locked kiosk environment.
+This allows videos to play automatically in kiosk mode.
 
 ---
 
-## Kiosk Script Behavior (Summary)
+## HDMI Audio Output Issue
 
-The script:
+### Problem
 
-- Waits 5 seconds for Wayland initialization  
-- Loads `config.env` to get `ENDPOINT`  
-- Prevents Chromium crash restore popup  
-- Launches Chromium in kiosk mode  
-- Restarts Chromium automatically if it crashes  
+Initially only the following device appeared:
 
-### Why `sleep 5`?
-
-Wayland must initialize before Chromium launches to avoid crash loops.
-
-### Why `source config.env`?
-
-Wayfire autostart does not inherit shell environment variables.  
-Sourcing ensures `ENDPOINT` is defined.
+This allows videos to play automatically in kiosk mode.
 
 ---
 
-## Issues Resolved
+## HDMI Audio Output Issue
 
-### 1. systemd Error 217/USER
-Cause: Incorrect user in service file  
-Fix: Set `User=vers`
+### Problem
 
-### 2. Chromium Not Fullscreen / Small in Corner
-Cause: Scaling mismatch  
-Fix:
-- Set `scale = 1`
-- Use correct HDMI resolution
-- Use `--start-maximized`
+Initially only the following device appeared:
+bcm2835 Headphones
 
-### 3. Keyring Popup
-Fix: `--password-store=basic`
 
-### 4. Mouse Cursor Visible
-Fix: `hide-cursor` plugin
+Attempts to use HDMI produced errors such as:
+Playback open error: -524
 
-### 5. Keyboard Shortcuts Still Working
-Fix: Remove `switcher` and `command` plugins
 
----
+### Investigation
 
-## Current Architecture
+Available audio devices were checked using:
+aplay -l
 
-```
-Raspberry Pi
-│
-├── systemd → signages-server.service → node server.js
-│
-├── Wayfire
-│     └── autostart → kiosk.sh
-│           └── Chromium → localhost:3000
-│
-└── HDMI Output (1024x768)
-```
+
+HDMI devices were detected:
+vc4hdmi0
+vc4hdmi1
+
+
+However audio still failed to play.
+
+### Solution
+
+After removing Wayland components and running the system with X11, HDMI audio began working normally through Chromium.
 
 ---
 
-## Final State
+## Black Screen During Video Playback
 
-- Auto-boot
-- Auto-start server
-- Auto-start Chromium
-- Crash auto-recovery
-- No cursor
-- No Alt+Tab
-- No escape shortcuts
-- No screen sleep
+### Problem
 
-System behaves as a locked-down digital signage appliance.
+In kiosk mode, video sometimes produced **audio but no visible video**.
+
+### Possible causes
+
+- hardware acceleration issues
+- compositor conflicts
+- video decoding problems
+
+### Solution
+
+The issue was resolved after migrating fully to X11 and restarting the system.
+
+Video playback worked normally afterward.
+
+---
+
+## Mouse Cursor Visible in Kiosk Mode
+
+### Problem
+
+The mouse cursor remained visible on the screen, which is undesirable for signage displays.
+
+### Solution
+
+The `unclutter` utility was installed to hide the cursor automatically.
+
+Installation:
+sudo apt install unclutter
+
+Usage example:
+unclutter -idle 0.5 -root
+
+
+---
+
+# Current Status
+
+Completed setup:
+
+- Raspberry Pi OS configured
+- X11 desktop environment running
+- Chromium kiosk mode working
+- automatic browser restart implemented
+- HDMI audio working
+- endpoint successfully loads content
+- health monitoring script implemented
+
+Scheduling functionality will be tested once backend scheduling is available.
