@@ -142,15 +142,15 @@ Optional additional details
 ```
 ```
 
-## SCRIPT STRUCTURE AND RESPONSIBILITIES
+# SCRIPT STRUCTURE AND RESPONSIBILITIES
 
 All scripts are organized into the following directories. Each teammate should work within one category.
 
-# scripts/maintenance
+## scripts/maintenance
 
 - Purpose: System upkeep and housekeeping tasks to keep the Raspberry Pi clean and stable over time.
 
-# Examples of scripts:
+## Examples of scripts:
 
 - Log cleanup (delete old logs, rotate logs)
 
@@ -160,14 +160,14 @@ All scripts are organized into the following directories. Each teammate should w
 
 - Backup scripts (backup configs or important files)
 
-# Goal:
+## Goal:
 - Ensure the system does not run out of storage and remains maintainable long-term.
 
-# scripts/monitoring
+## scripts/monitoring
 
 - Purpose: Collect and report system information for visibility and diagnostics.
 
-# Examples of scripts:
+## Examples of scripts:
 
 - Health monitoring (CPU, RAM, disk, temperature)
 
@@ -177,14 +177,14 @@ All scripts are organized into the following directories. Each teammate should w
 
 - Log generation (daily or hourly reports)
 
-# Goal:
+## Goal:
 - Provide insight into system performance and detect potential issues early.
 
-# scripts/reliability
+## scripts/reliability
 
 - Purpose: Ensure the kiosk system stays running and recovers automatically from failures.
 
-# Examples of scripts:
+## Examples of scripts:
 
 - Watchdog scripts (restart Chromium if it crashes)
 
@@ -194,5 +194,5 @@ All scripts are organized into the following directories. Each teammate should w
 
 - Endpoint checker (reload kiosk if endpoint is down)
 
-# Goal:
+## Goal:
 - Keep the kiosk running continuously with minimal manual intervention.
