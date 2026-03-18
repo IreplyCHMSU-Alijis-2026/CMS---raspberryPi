@@ -1,22 +1,50 @@
 #!/bin/bash
-echo "Enter date (YYYY-MM-DD), e.g., 2026-03-11:"
-read -rp "Date: " user_date
-if [[ ! $user_date =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-    echo "Error: Invalid date format. Please use YYYY-MM-DD." >&2
-    exit 1
+
+BASE_LOG_DIR="/home/vers/signage/logs"
+LOG_FOLDERS=("pi-check_logs" "watchdog_logs" "maintenance")
+
+# Ask user if they want today or custom date
+read -rp "View logs for today? (Y/n): " use_today
+use_today=${use_today:-Y}
+
+if [[ "$use_today" =~ ^[Yy]$ ]]; then
+    DATE_STR=$(date '+%Y-%m-%d')
+else
+    read -rp "Enter date (YYYY-MM-DD): " DATE_STR
+    if [[ ! $DATE_STR =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        echo "Invalid date format" >&2
+        exit 1
+    fi
 fi
 
-logfile="/home/vers/signage/logs/health_report_${user_date}.log"
-if [[ ! -f "$logfile" ]]; then
-    echo "Error: Log file not found at $logfile" >&2
-    exit 1
-fi
+echo ""
+echo "Fetching logs for date: $DATE_STR"
+echo "===================================================="
 
-echo -e "\nFetching health logs for date: $user_date\n"
+# Iterate through log folders
+for folder in "${LOG_FOLDERS[@]}"; do
+    LOG_DIR="$BASE_LOG_DIR/$folder"
+    if [[ ! -d "$LOG_DIR" ]]; then
+        echo "Folder not found: $LOG_DIR"
+        continue
+    fi
 
-echo "HEALTH LOGS" | awk -v date="$user_date" '{print "==================== " date " | " $0 " ===================="}'
+    log_files=( "$LOG_DIR"/*"$DATE_STR"*.log )
+    if [ ${#log_files[@]} -eq 0 ]; then
+        echo "No log files found in $folder for $DATE_STR"
+        continue
+    fi
 
-grep -A 100 "^$user_date" "$logfile"
-if [ $? -eq 0 ]; then
-    echo -e "========================================================================="
-fi
+    # Display logs
+    for logfile in "${log_files[@]}"; do
+        echo ""
+        echo "FOLDER: $folder | FILE: $(basename "$logfile")"
+        echo "--------------------------------------------------"
+
+        # Highlight common issues
+        grep --color=always -E "ERROR|FAIL|CRASH|$" "$logfile"
+    done
+done
+
+echo ""
+echo "==================== END OF LOG =================="

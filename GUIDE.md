@@ -145,7 +145,7 @@ Optional additional details
 
 All scripts are organized into the following directories. Each teammate should work within one category.
 
-## scripts/maintenance (Juvy)
+## scripts/maintenance
 
 - Purpose: System upkeep and housekeeping tasks to keep the Raspberry Pi clean and stable over time.
 
@@ -162,7 +162,7 @@ All scripts are organized into the following directories. Each teammate should w
 ## Goal:
 - Ensure the system does not run out of storage and remains maintainable long-term.
 
-## scripts/monitoring (Kissa)
+## scripts/monitoring
 
 - Purpose: Collect and report system information for visibility and diagnostics.
 
@@ -179,7 +179,7 @@ All scripts are organized into the following directories. Each teammate should w
 ## Goal:
 - Provide insight into system performance and detect potential issues early.
 
-## scripts/reliability (Shielou)
+## scripts/reliability
 
 - Purpose: Ensure the kiosk system stays running and recovers automatically from failures.
 
