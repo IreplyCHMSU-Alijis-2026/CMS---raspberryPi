@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# PATHS
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
+LOG_DIR="$BASE_DIR/logs"
+
+DATE_STR=$(date +'%Y-%m-%d')
+
+PI_CHECK_LOGS="$LOG_DIR/pi-check_logs"
+WATCHDOG_LOGS="$LOG_DIR/watchdog_logs"
+MAINTENANCE_LOGS="$LOG_DIR/maintenance_logs"
+
+MAINT_LOGNAME="$MAINTENANCE_LOGS/maintenance_${DATE_STR}.log"
+
+# ensure the these directories exist
+mkdir -p "$PI_CHECK_LOGS"
+mkdir -p "$WATCHDOG_LOGS"
+mkdir -p "$MAINTENANCE_LOGS"
+
+# log function
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$MAINT_LOGNAME"
+}
+
+log "===================================================="
+log "MAINTENANCE STARTED"
+
+# clean old logs (+7 days old)
+log "CLEANING LOGS OLDER THAN 7 DAYS..."
+
+clean_logs() {
+   local DIR=$1
+   local NAME=$2
+   local COUNT=0
+
+    if [[ -d "$DIR" ]]; then
+        COUNT=$(find "$DIR" -type f -name "*.log" -mtime +7 | wc -l | tr -d ' ')
+        find "$DIR" -type f -name "*.log" -mtime +7 -delete
+        log "$NAME: Deleted $COUNT old log(s)"
+    else
+        log "$NAME: Directory not found"
+    fi
+}
+
+# clean specific log directories
+clean_logs "$PI_CHECK_LOGS" "pi-check logs"
+clean_logs "$WATCHDOG_LOGS" "watchdog logs"
+clean_logs "$MAINTENANCE_LOGS" "maintenance logs"
+
+log "LOG CLEANUP DONE"
+
+# network check and a simple
+log "CHECKING NETWORK CONNECTIVITY..."
+
+if ping -c 1 -W 3 8.8.8.8 &>/dev/null; then
+    log "Network: OK"
+else
+    log "Network: Down - attempting recovery"
+    sudo systemctl restart NetworkManager &>/dev/null || true
+    sleep 5
+
+    if ping -c 1 -W 3 8.8.8.8 &>/dev/null; then
+        log "Network Recovery: SUCCESS"
+    else
+        log "Network Recovery: FAILED"
+    fi
+fi
+
+log "MAINTENANCE FINISHED"
+log "===================================================="
