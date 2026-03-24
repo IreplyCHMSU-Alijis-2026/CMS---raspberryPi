@@ -1,121 +1,127 @@
 #!/bin/bash
 
 # Config
-LOG_DIR="/home/vers/signage/logs/pi-check_logs"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
+LOG_DIR="$BASE_DIR/logs/pi-check_logs"
 DATE_ONLY=$(date '+%Y-%m-%d')
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-LOG_FILE="$LOG_DIR/health_report_${DATE_ONLY}.log"
+LOG_FILE="$LOG_DIR/pi-check_${DATE_ONLY}.log"
 
-# Health function (unchanged)
+log () {
+    echo "[$TIMESTAMP] $*" >> "$LOG_FILE"
+}
+
+# Health function
 health() {
-    echo "============================================================"
-    echo "                  RASPBERRY PI HEALTH REPORT                "
-    echo "============================================================"
-    echo "Generated on: $TIMESTAMP"
-    echo
 
-    echo "===================== SYSTEM INFORMATION ==================="
-    echo "Hostname           : $(hostname)"
-    echo "Kernel Version     : $(uname -r)"
-    echo "OS                 : $(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')"
-    echo "Architecture       : $(uname -m)"
-    echo "Uptime             : $(uptime -p)"
-    echo "Last Boot          : $(who -b | awk '{print $3, $4}')"
-    echo
+log "============================================================"
+log "              RASPBERRY PI HEALTH REPORT                    "
+log "============================================================"
+log "Generated on: $(date '+%Y-%m-%d %H:%M:%S')"
+log
 
-    echo "======================== CPU STATUS ========================"
-    CPU_LOAD=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
-    echo "CPU Load           : ${CPU_LOAD}%"
-    if command -v nproc >/dev/null 2>&1; then
-        echo "CPU Cores          : $(nproc)"
-    fi
-    if command -v vcgencmd >/dev/null 2>&1; then
-        echo "CPU Temperature    : $(vcgencmd measure_temp | cut -d= -f2)"
-        echo "CPU Throttled Info : $(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)"
+log "===================== SYSTEM INFORMATION ==================="
+log "Hostname           : $(hostname)"
+log "Kernel Version     : $(uname -r)"
+log "OS                 : $(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')"
+log "Architecture       : $(uname -m)"
+log "Uptime             : $(uptime -p)"
+log "Last Boot          : $(who -b | awk '{print $3, $4}')"
+log "CPU Model          : $(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | sed 's/^[ \t]*//')"
+log "GPU Model          : $(vcgencmd version 2>/dev/null | head -1)"
+log "Serial Number      : $(grep 'Serial' /proc/cpuinfo | cut -d: -f2 | sed 's/^[ \t]*//')"
+log "IP Address         : $(hostname -I | awk '{print $1}')"
+log
+
+log "======================== CPU STATUS ========================"
+CPU_LOAD=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
+log "CPU Load           : ${CPU_LOAD}%"
+log "CPU Cores          : $(nproc 2>/dev/null)"
+
+if command -v vcgencmd >/dev/null 2>&1; then
+    log "CPU Temperature    : $(vcgencmd measure_temp | cut -d= -f2)"
+    log "CPU Throttled Info : $(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)"
+else
+    log "CPU Temperature    : Not available"
+fi
+
+log "CPU Frequency      : $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null | awk '{print $1/1000 " MHz"}')"
+log "CPU Governor       : $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null)"
+log
+
+log "======================= MEMORY STATUS ======================"
+free -h | while read line; do log "$line"; done
+MEM_PERCENT=$(free | awk '/Mem:/ {printf "%.2f", $3/$2 * 100}')
+log "Memory Usage       : ${MEM_PERCENT}%"
+log
+
+log "======================== DISK STATUS ======================="
+df -h / | while read line; do log "$line"; done
+ROOT_USAGE=$(df -h / | awk 'NR==2 {print $5}')
+log "Root Partition Use : $ROOT_USAGE"
+log
+
+log "======================= NETWORK STATUS ====================="
+
+if ip link show wlan0 >/dev/null 2>&1; then
+    IFACE="wlan0"
+elif ip link show eth0 >/dev/null 2>&1; then
+    IFACE="eth0"
+else
+    IFACE=""
+fi
+
+if [ -n "$IFACE" ]; then
+    log "Active Interface   : $IFACE"
+
+    IP_ADDR=$(ip -4 addr show "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1)
+    MAC_ADDR=$(cat /sys/class/net/"$IFACE"/address 2>/dev/null)
+    STATE=$(cat /sys/class/net/"$IFACE"/operstate 2>/dev/null)
+
+    log "IP Address         : ${IP_ADDR:-Unavailable}"
+    log "MAC Address        : ${MAC_ADDR:-Unavailable}"
+    log "Interface State    : ${STATE:-Unavailable}"
+
+    log "Ping Test (8.8.8.8):"
+    if ping -c 2 -W 2 8.8.8.8 >/dev/null 2>&1; then
+        log "Internet Status    : Reachable"
     else
-        echo "CPU Temperature    : vcgencmd not available"
+        log "Internet Status    : Unreachable"
     fi
-    echo
+else
+    log "No network interface found"
+fi
+log
 
-    echo "======================= MEMORY STATUS ======================"
-    free -h
-    echo
-    MEM_PERCENT=$(free | awk '/Mem:/ {printf "%.2f", $3/$2 * 100}')
-    echo "Memory Usage       : ${MEM_PERCENT}%"
-    echo
+log "======================= STORAGE DETAIL ====================="
+df -h | while read line; do log "$line"; done
+log
 
-    echo "======================== DISK STATUS ======================="
-    df -h /
-    echo
-    ROOT_USAGE=$(df -h / | awk 'NR==2 {print $5}')
-    echo "Root Partition Use : $ROOT_USAGE"
-    echo
+log "======================= TOP PROCESSES ======================"
+log "Top CPU Processes:"
+ps -eo pid,cmd,%mem,%cpu --sort=-%cpu | head -n 6 | while read line; do log "$line"; done
 
-    echo "======================= NETWORK STATUS ====================="
-    if ip link show wlan0 >/dev/null 2>&1; then
-        IFACE="wlan0"
-    elif ip link show eth0 >/dev/null 2>&1; then
-        IFACE="eth0"
-    else
-        IFACE=""
+log "Top Memory Processes:"
+ps -eo pid,cmd,%mem,%cpu --sort=-%mem | head -n 6 | while read line; do log "$line"; done
+log
+
+log "======================= SERVICE STATUS ====================="
+for svc in ssh cron NetworkManager; do
+    if systemctl list-unit-files | grep -q "^${svc}\.service"; then
+        formatted=$(printf "%-25s : %s" "$svc Service" "$(systemctl is-active "$svc" 2>/dev/null)")
+        log "$formatted"
     fi
+done
+log
 
-    if [ -n "$IFACE" ]; then
-        echo "Active Interface   : $IFACE"
-        IP_ADDR=$(ip -4 addr show "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1)
-        MAC_ADDR=$(cat /sys/class/net/"$IFACE"/address 2>/dev/null)
-        RX=$(cat /sys/class/net/"$IFACE"/statistics/rx_bytes 2>/dev/null)
-        TX=$(cat /sys/class/net/"$IFACE"/statistics/tx_bytes 2>/dev/null)
-        STATE=$(cat /sys/class/net/"$IFACE"/operstate 2>/dev/null)
+log "======================== JOURNAL ERRORS ===================="
+journalctl -p 3 -n 10 --no-pager 2>/dev/null | while read line; do log "$line"; done
+log
 
-        echo "IP Address         : ${IP_ADDR:-Unavailable}"
-        echo "MAC Address        : ${MAC_ADDR:-Unavailable}"
-        echo "Interface State    : ${STATE:-Unavailable}"
-        echo "Received Bytes     : ${RX:-Unavailable}"
-        echo "Transmitted Bytes  : ${TX:-Unavailable}"
+log "======================== REPORT END ========================"
+log
+log
 
-        echo
-        echo "Ping Test (8.8.8.8):"
-        ping -c 2 -W 2 8.8.8.8 >/dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            echo "Internet Status    : Reachable"
-        else
-            echo "Internet Status    : Unreachable"
-        fi
-    else
-        echo "No network interface found"
-    fi
-    echo
-
-    echo "======================= STORAGE DETAIL ====================="
-    echo "Mounted Filesystems:"
-    df -h
-    echo
-
-    echo "======================= TOP PROCESSES ======================"
-    echo "Top 5 CPU-consuming processes:"
-    ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head -n 6
-    echo
-    echo "Top 5 Memory-consuming processes:"
-    ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 6
-    echo
-
-    echo "======================= SERVICE STATUS ====================="
-    for svc in ssh cron networking; do
-        if systemctl list-unit-files | grep -q "^${svc}\.service"; then
-            echo "$svc Service       : $(systemctl is-active "$svc" 2>/dev/null)"
-        fi
-    done
-    echo
-
-    echo "======================== JOURNAL ERRORS ===================="
-    echo "Recent system errors (last 10):"
-    journalctl -p 3 -n 10 --no-pager 2>/dev/null || echo "journalctl not available or no recent errors"
-    echo
-
-    echo "======================== REPORT END ========================"
-    echo
-    echo
 }
 
 # Create log folder if not exists

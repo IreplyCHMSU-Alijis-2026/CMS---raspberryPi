@@ -49,7 +49,7 @@ clean_logs "$MAINTENANCE_LOGS" "maintenance logs"
 
 log "LOG CLEANUP DONE"
 
-# network check and a simple
+# network check and a simple recovery attempt if it's down
 log "CHECKING NETWORK CONNECTIVITY..."
 
 if ping -c 1 -W 3 8.8.8.8 &>/dev/null; then
@@ -64,6 +64,14 @@ else
     else
         log "Network Recovery: FAILED"
     fi
+fi
+
+# check for updates
+log "CHECKING FOR SYSTEM UPDATES..."
+if sudo apt update -qq && sudo apt list --upgradable 2>/dev/null | grep -q "upgradable"; then
+    log "Updates Available: YES"
+else
+    log "Updates Available: NO"
 fi
 
 log "MAINTENANCE FINISHED"
