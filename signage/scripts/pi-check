@@ -115,8 +115,8 @@ done
 log
 
 log "======================== JOURNAL ERRORS ===================="
-journalctl -p 3 -n 10 --no-pager 2>/dev/null | while read line; do log "$line"; done
-log
+formatted=$(printf "%s\n" "$(journalctl -p 3 -n 10 --no-pager 2>/dev/null | while read line; do log "$line"; done)")
+log "$formatted"
 
 log "======================== REPORT END ========================"
 log
